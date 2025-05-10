@@ -1,11 +1,26 @@
 import msgParser
 import carState
 import carControl
+import csv
+import os
 
 class Driver(object):
     '''
     A driver object for the SCRC
     '''
+
+    # Open the log file only once for telemetry logging
+    # log_file_path = "telemetry_gspeedway_corolla.csv"
+    # log_file_path = "telemetry_etrack3_peugeot.csv"
+    log_file_path = "telemetry_dirt2_mitsubishilancer.csv"
+    log_file = open(log_file_path, mode='w', newline='')
+    csv_writer = csv.writer(log_file)
+    csv_writer.writerow([
+        'speedX', 'trackPos', 'angle', 'rpm', 'gear',
+        *['track_' + str(i) for i in range(19)],
+        *['opponent_' + str(i) for i in range(36)],
+        'accel', 'brake', 'steer', 'gear_out'
+    ])
 
     def __init__(self, stage):
         '''Constructor'''
@@ -42,6 +57,32 @@ class Driver(object):
         self.steer()
         self.gear()
         self.speed()
+
+        # Log telemetry data
+        try:
+            speedX = self.state.getSpeedX()
+            trackPos = self.state.getTrackPos()
+            angle = self.state.getAngle()
+            rpm = self.state.getRpm()
+            gear = self.state.getGear()
+            track = self.state.getTrack() or [0.0] * 19
+            opponents = self.state.getOpponents() or [200.0] * 36
+
+            accel = self.control.getAccel()
+            brake = self.control.getBrake()
+            steer = self.control.getSteer()
+            gear_out = self.control.getGear()
+
+            if None not in (speedX, trackPos, angle, rpm, gear) and len(track) == 19 and len(opponents) == 36:
+                Driver.csv_writer.writerow([
+                    speedX, trackPos, angle, rpm, gear,
+                    *track,
+                    *opponents,
+                    accel, brake, steer, gear_out
+                ])
+        except Exception as e:
+            print(f"[WARNING] Telemetry log error: {e}")
+
         return self.control.toMsg()
 
     def steer(self):
@@ -91,7 +132,9 @@ class Driver(object):
         self.control.setAccel(accel)
 
     def onShutDown(self):
-        pass
+        if Driver.log_file:
+            Driver.log_file.close()
+            print("[INFO] Telemetry log saved to telemetry_log.csv")
 
     def onRestart(self):
         pass
